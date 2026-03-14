@@ -5,15 +5,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Order Analysis Dashboard</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    {{ bokeh_css|safe }}
-    {{ bokeh_js|safe }}
     <style>
         :root {
             --primary-color: #1f2933;
             --accent-color: #2f80ed;
             --surface-color: rgba(255, 255, 255, 0.96);
+            --border-color: rgba(31, 41, 51, 0.12);
+            --muted-color: #52606d;
+            --danger-bg: #fdecec;
+            --danger-fg: #a61b1b;
+            --success-bg: #ecfdf3;
+            --success-fg: #146c43;
         }
 
         body {
@@ -70,7 +72,7 @@
         .status-label {
             font-size: 0.82rem;
             font-weight: 600;
-            color: #52606d;
+            color: var(--muted-color);
         }
 
         .trader-toggle small {
@@ -92,10 +94,18 @@
             border: none;
             padding: 8px 14px;
             font-weight: 600;
+            color: #fff;
+            border-radius: 6px;
+            cursor: pointer;
         }
 
         .btn-primary:hover {
             background: #2569c8;
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.7;
+            cursor: wait;
         }
 
         .form-control,
@@ -103,12 +113,32 @@
             border-radius: 6px;
             border: 1px solid #ddd;
             padding: 8px 12px;
+            width: 100%;
+            font: inherit;
+            background: #fff;
         }
 
         .form-control:focus,
         .form-select:focus {
             border-color: var(--accent-color);
             box-shadow: 0 0 5px rgba(52, 152, 219, 0.3);
+            outline: none;
+        }
+
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .toggle-row input {
+            width: 2.75rem;
+            height: 1.4rem;
+            margin: 0;
+            accent-color: var(--accent-color);
         }
 
         .alert {
@@ -116,10 +146,22 @@
             border: none;
             display: none;
             margin-top: 12px;
+            padding: 10px 12px;
+            font-size: 0.92rem;
         }
 
         .alert.active {
             display: block;
+        }
+
+        .alert-danger {
+            background: var(--danger-bg);
+            color: var(--danger-fg);
+        }
+
+        .alert-success {
+            background: var(--success-bg);
+            color: var(--success-fg);
         }
 
         @media (max-width: 768px) {
@@ -142,16 +184,16 @@
     <div class="container-main">
         <div class="header">
             <div>
-                <h1><i class="fas fa-sliders"></i> Trader Controls</h1>
-                <p>Compact controls for trader enablement and volume tuning.</p>
+                <h1>Trader Controls</h1>
+                <p>Compact controls for trader enablement, volume tuning, and BTC MACD tilt.</p>
             </div>
 
             <div class="trader-toggle">
                 <div class="control-row">
-                    <div class="form-check form-switch mb-0">
-                        <input class="form-check-input" type="checkbox" role="switch" id="traderEnabledSwitch">
-                        <label class="form-check-label" for="traderEnabledSwitch">Trader enabled</label>
-                    </div>
+                    <label class="toggle-row" for="traderEnabledSwitch">
+                        <input type="checkbox" role="switch" id="traderEnabledSwitch">
+                        <span>Trader enabled</span>
+                    </label>
                     <small id="traderEnabledHint">Loading…</small>
                 </div>
 
@@ -174,6 +216,16 @@
                     </div>
                     <small id="traderPositionSlopeHint"></small>
                 </div>
+
+                <div class="control-row">
+                    <label for="traderBtcMacdCoeffInput">BTCUSDT MACD coeff</label>
+                    <div class="compact-input-group">
+                        <input type="number" class="form-control" id="traderBtcMacdCoeffInput" step="0.01"
+                            placeholder="0.0">
+                        <button class="btn btn-primary" type="button" id="traderBtcMacdCoeffApplyBtn">Apply</button>
+                    </div>
+                    <small id="traderBtcMacdCoeffHint"></small>
+                </div>
             </div>
 
             <div class="alert alert-danger" id="errorAlert"></div>
@@ -189,8 +241,6 @@
         -->
     </div>
 
-    <!-- Scripts -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
     <script>
         // --- Trader enable/disable control ---
         const traderEnabledSwitch = document.getElementById('traderEnabledSwitch');
@@ -202,6 +252,9 @@
         const traderPositionSlopeInput = document.getElementById('traderPositionSlopeInput');
         const traderPositionSlopeApplyBtn = document.getElementById('traderPositionSlopeApplyBtn');
         const traderPositionSlopeHint = document.getElementById('traderPositionSlopeHint');
+        const traderBtcMacdCoeffInput = document.getElementById('traderBtcMacdCoeffInput');
+        const traderBtcMacdCoeffApplyBtn = document.getElementById('traderBtcMacdCoeffApplyBtn');
+        const traderBtcMacdCoeffHint = document.getElementById('traderBtcMacdCoeffHint');
 
         async function refreshTraderState() {
             try {
@@ -228,10 +281,20 @@
                 } else {
                     traderPositionSlopeHint.textContent = 'Current positionSlope: (unset)';
                 }
+
+                const mc = (data.btcMacdCoeff === null || data.btcMacdCoeff === undefined) ? null : Number(data.btcMacdCoeff);
+                if (mc !== null && Number.isFinite(mc)) {
+                    traderBtcMacdCoeffHint.textContent = `Current BTC MACD coeff: ${mc}`;
+                    if (!traderBtcMacdCoeffInput.value)
+                        traderBtcMacdCoeffInput.value = String(mc);
+                } else {
+                    traderBtcMacdCoeffHint.textContent = 'Current BTC MACD coeff: (unset)';
+                }
             } catch (e) {
                 traderEnabledHint.textContent = `State unavailable (${e.message})`;
                 traderVolMultHint.textContent = '';
                 traderPositionSlopeHint.textContent = '';
+                traderBtcMacdCoeffHint.textContent = '';
             }
         }
 
@@ -315,6 +378,40 @@
                 }
             } catch (e) {
                 showError(`Failed to update PositionSlope: ${e.message}`);
+                await refreshTraderState();
+            }
+        });
+
+        traderBtcMacdCoeffApplyBtn.addEventListener('click', async () => {
+            const raw = (traderBtcMacdCoeffInput.value || '').trim();
+            if (!raw) {
+                showError('BTC MACD coeff is required');
+                return;
+            }
+            const btcMacdCoeff = Number(raw);
+            if (!Number.isFinite(btcMacdCoeff)) {
+                showError('Invalid BTC MACD coeff');
+                return;
+            }
+            traderBtcMacdCoeffHint.textContent = 'Updating…';
+            try {
+                const r = await fetch('/api/trader/btcmacdcoeff', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ btcMacdCoeff })
+                });
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const data = await r.json();
+                const mc = (data.btcMacdCoeff === null || data.btcMacdCoeff === undefined) ? null : Number(data.btcMacdCoeff);
+                if (mc !== null && Number.isFinite(mc)) {
+                    traderBtcMacdCoeffHint.textContent = `Current BTC MACD coeff: ${mc}`;
+                    showSuccess(`BTC MACD coeff set to ${mc}`);
+                } else {
+                    traderBtcMacdCoeffHint.textContent = 'Current BTC MACD coeff: (unset)';
+                    showSuccess('BTC MACD coeff unset');
+                }
+            } catch (e) {
+                showError(`Failed to update BTC MACD coeff: ${e.message}`);
                 await refreshTraderState();
             }
         });
