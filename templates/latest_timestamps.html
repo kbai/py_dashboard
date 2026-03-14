@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Latest KDB Timestamps</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-light">
+    <div class="container py-4" style="max-width: 900px;">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3 class="mb-0">Latest KDB Timestamps</h3>
+            <div class="d-flex gap-2">
+                <a class="btn btn-outline-secondary btn-sm" href="/">Dashboard</a>
+                <button id="refreshBtn" class="btn btn-primary btn-sm">Refresh</button>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="text-muted small">Trade table</div>
+                        <div class="fw-semibold" id="tradeTable">—</div>
+                        <div class="text-muted small mt-2">Latest timestamp</div>
+                        <div class="font-monospace" id="tradeLatest">—</div>
+                        <div class="text-muted small mt-1" id="tradeMeta"></div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="text-muted small">PriceBook table</div>
+                        <div class="fw-semibold" id="pbTable">—</div>
+                        <div class="text-muted small mt-2">Latest timestamp</div>
+                        <div class="font-monospace" id="pbLatest">—</div>
+                        <div class="text-muted small mt-1" id="pbMeta"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="alert alert-danger d-none" role="alert" id="errBox"></div>
+        <div class="text-muted small">Auto-refresh: every 1 minute</div>
+    </div>
+
+    <script>
+        const el = (id) => document.getElementById(id);
+
+        async function refresh() {
+            el('errBox').classList.add('d-none');
+            el('errBox').textContent = '';
+
+            try {
+                const r = await fetch('/api/latest-timestamps', { cache: 'no-store' });
+                const data = await r.json();
+                if (!r.ok) {
+                    throw new Error(data && data.error ? data.error : ('HTTP ' + r.status));
+                }
+
+                const t = data.tables.trade;
+                const p = data.tables.pricebook;
+
+                el('tradeTable').textContent = `${t.table}`;
+                el('tradeLatest').textContent = t.latest || 'n/a';
+                el('tradeMeta').textContent = `tsCol=${t.tsColUsed} (requested ${t.tsColRequested})`;
+
+                el('pbTable').textContent = `${p.table}`;
+                el('pbLatest').textContent = p.latest || 'n/a';
+                el('pbMeta').textContent = `tsCol=${p.tsColUsed} (requested ${p.tsColRequested})`;
+
+            } catch (e) {
+                el('errBox').textContent = String(e && e.message ? e.message : e);
+                el('errBox').classList.remove('d-none');
+            }
+        }
+
+        el('refreshBtn').addEventListener('click', refresh);
+        refresh();
+        setInterval(refresh, 60000);
+    </script>
+</body>
+
+</html>

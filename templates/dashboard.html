@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Analysis Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    {{ bokeh_css|safe }}
+    {{ bokeh_js|safe }}
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --accent-color: #3498db;
+            --success-color: #27ae60;
+            --warning-color: #f39c12;
+            --danger-color: #e74c3c;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container-main {
+            max-width: 1400px;
+        }
+
+        .header {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: var(--primary-color);
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #7f8c8d;
+            margin: 0;
+        }
+
+        .trader-toggle {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            border-radius: 10px;
+            background: rgba(236, 240, 241, 0.7);
+        }
+
+        .trader-toggle small {
+            color: #7f8c8d;
+        }
+
+        .card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px 10px 0 0 !important;
+            padding: 20px;
+        }
+
+        .card-header h5 {
+            margin: 0;
+            font-weight: bold;
+        }
+
+        .btn-primary {
+            background: var(--accent-color);
+            border: none;
+            padding: 10px 25px;
+            font-weight: 600;
+            transition: background 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+
+        .btn-secondary {
+            background: #95a5a6;
+            border: none;
+        }
+
+        .btn-secondary:hover {
+            background: #7f8c8d;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        .form-control,
+        .form-select {
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            padding: 10px 15px;
+        }
+
+        .form-control:focus,
+        .form-select:focus {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 5px rgba(52, 152, 219, 0.3);
+        }
+
+        textarea.form-control {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner-border {
+            color: var(--accent-color);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-box h6 {
+            margin: 0;
+            font-size: 12px;
+            opacity: 0.9;
+            text-transform: uppercase;
+        }
+
+        .stat-box .value {
+            font-size: 24px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .plot-container {
+            display: none;
+            margin-top: 20px;
+        }
+
+        .plot-container.active {
+            display: block;
+        }
+
+        .plot-container img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .table-container {
+            display: none;
+            margin-top: 20px;
+            overflow-x: auto;
+        }
+
+        .table-container.active {
+            display: block;
+        }
+
+        .table {
+            margin: 0;
+            font-size: 12px;
+        }
+
+        .table thead {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .table tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .alert {
+            border-radius: 8px;
+            border: none;
+            display: none;
+        }
+
+        .alert.active {
+            display: block;
+        }
+
+        .file-upload-area {
+            border: 2px dashed var(--accent-color);
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            background: #f8f9fa;
+            cursor: pointer;
+            transition: background 0.3s ease;
+            margin-bottom: 15px;
+        }
+
+        .file-upload-area:hover {
+            background: #e8f4f8;
+        }
+
+        .file-upload-area.dragging {
+            background: #d4e8f7;
+            border-color: #2980b9;
+        }
+
+        .file-upload-area i {
+            font-size: 40px;
+            color: var(--accent-color);
+            margin-bottom: 10px;
+        }
+
+        .nav-tabs .nav-link {
+            color: var(--primary-color);
+            border: none;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -3px;
+        }
+
+        .nav-tabs .nav-link:hover {
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+        }
+
+        .nav-tabs .nav-link.active {
+            color: var(--accent-color);
+            background-color: transparent;
+            border-color: var(--accent-color);
+        }
+
+        .tab-content {
+            border: 1px solid #ddd;
+            border-top: none;
+            padding: 20px;
+            border-radius: 0 0 8px 8px;
+        }
+
+        .info-box {
+            background: #ecf0f1;
+            border-left: 4px solid var(--accent-color);
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+
+        .info-box i {
+            color: var(--accent-color);
+            margin-right: 10px;
+        }
+
+        footer {
+            text-align: center;
+            color: white;
+            margin-top: 30px;
+            padding: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                padding: 20px;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            body {
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container-main">
+        <!-- Header -->
+        <div class="header">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div>
+                    <h1><i class="fas fa-chart-line"></i> Order Analysis Dashboard</h1>
+                    <p>Parse, visualize, and analyze trading order logs</p>
+                </div>
+                <div class="d-flex align-items-start gap-2 flex-wrap">
+                    <a class="btn btn-outline-secondary btn-sm" href="/force-orders">Force Orders</a>
+                    <a class="btn btn-outline-secondary btn-sm" href="/latest">Latest Timestamps</a>
+                    <div class="trader-toggle">
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" role="switch" id="traderEnabledSwitch">
+                            <label class="form-check-label" for="traderEnabledSwitch">Trader enabled</label>
+                        </div>
+                        <small id="traderEnabledHint">Loading…</small>
+
+                        <div class="input-group input-group-sm mt-2">
+                            <span class="input-group-text">VolMult</span>
+                            <input type="number" class="form-control" id="traderVolMultInput" step="0.1" min="0"
+                                placeholder="(unset)">
+                            <button class="btn btn-outline-light" type="button"
+                                id="traderVolMultApplyBtn">Apply</button>
+                        </div>
+                        <small id="traderVolMultHint"></small>
+
+                        <div class="input-group input-group-sm mt-2">
+                            <span class="input-group-text">PositionSlope</span>
+                            <input type="number" class="form-control" id="traderPositionSlopeInput" step="0.1"
+                                placeholder="(unset)">
+                            <button class="btn btn-outline-light" type="button"
+                                id="traderPositionSlopeApplyBtn">Apply</button>
+                        </div>
+                        <small id="traderPositionSlopeHint"></small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Err/log file selection (server-side file) -->
+            <div class="mt-3">
+                <div class="row g-2 align-items-center">
+                    <div class="col-12 col-lg-8">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text"><i class="fas fa-file-lines"></i>&nbsp;Err file</span>
+                            <select class="form-select" id="errFileSelect"></select>
+                            <button class="btn btn-outline-secondary" type="button" id="errFileRefreshBtn"
+                                title="Refresh list">
+                                <i class="fas fa-rotate"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-12 col-lg-4">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text">Path</span>
+                            <input type="text" class="form-control" id="errFilePathInput" placeholder="/path/to/err">
+                            <button class="btn btn-primary" type="button" id="errFileApplyBtn">Apply</button>
+                        </div>
+                    </div>
+                </div>
+                <small id="errFileHint" class="text-muted"></small>
+
+                <div class="row g-2 align-items-center mt-2">
+                    <div class="col-12 col-lg-5">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text"><i class="fas fa-filter"></i>&nbsp;Symbol pair</span>
+                            <input type="text" class="form-control" id="symbolPairInput"
+                                placeholder="ETHUSDT (blank = all)">
+                            <button class="btn btn-outline-secondary" type="button" id="symbolPairClearBtn"
+                                title="Clear">
+                                <i class="fas fa-xmark"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-12 col-lg-7">
+                        <small id="symbolPairHint" class="text-muted">Applies to err-based plots (Refresh / MyBBO /
+                            Filled+Position).</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="row">
+            <!-- Input Panel -->
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-upload"></i> Input Data</h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Tabs for Input Methods -->
+                        <ul class="nav nav-tabs mb-3" role="tablist">
+                            <li class="nav-item">
+                                <a class="nav-link active" data-bs-toggle="tab" href="#upload-tab">Upload</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#paste-tab">Paste</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#mybbo-tab">MyBBO Analysis</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#filled-tab">Filled Orders</a>
+                            </li>
+                        </ul>
+
+                        <div class="tab-content">
+                            <!-- Upload Tab -->
+                            <div id="upload-tab" class="tab-pane fade show active">
+                                <div class="file-upload-area" id="fileUploadArea">
+                                    <i class="fas fa-cloud-upload-alt"></i>
+                                    <p><strong>Click to upload or drag & drop</strong></p>
+                                    <p style="font-size: 12px; color: #7f8c8d;">Maximum file size: 16MB</p>
+                                </div>
+                                <input type="file" id="fileInput" style="display: none;" accept=".log,.txt,.csv">
+                                <div id="fileName" style="font-size: 12px; color: #7f8c8d;"></div>
+                            </div>
+
+                            <!-- Paste Tab -->
+                            <div id="paste-tab" class="tab-pane fade">
+                                <textarea class="form-control" id="logText" rows="8"
+                                    placeholder="Paste your log content here..."></textarea>
+                            </div>
+
+                            <!-- MyBBO Tab -->
+                            <div id="mybbo-tab" class="tab-pane fade">
+                                <p><strong>MyBBO Bid/Ask Price Analysis</strong></p>
+                                <p style="font-size: 12px; color: #7f8c8d;">Analyze bid and ask prices from the trading
+                                    engine err file.</p>
+                                <button class="btn btn-primary" id="mybboPltBtn" style="width: 100%;">
+                                    <i class="fas fa-chart-line"></i> Generate MyBBO Plot
+                                </button>
+                            </div>
+
+                            <!-- Filled Orders Tab -->
+                            <div id="filled-tab" class="tab-pane fade">
+                                <p><strong>Filled Orders Analysis</strong></p>
+                                <p style="font-size: 12px; color: #7f8c8d;">Analyze filled and partially filled orders
+                                    from the trading engine err file.</p>
+                                <button class="btn btn-primary" id="filledOrdersBtn" style="width: 100%;">
+                                    <i class="fas fa-chart-bar"></i> Generate Filled + Position Plot
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Format Selection -->
+                        <div class="input-group mt-3">
+                            <label class="input-group-text">Log Format</label>
+                            <select class="form-select" id="logFormat">
+                                <option value="auto">Auto Detect</option>
+                                <option value="ordupdate">Order Update</option>
+                                <option value="grep">Grep Format</option>
+                            </select>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="d-grid gap-2 mt-3">
+                            <button class="btn btn-primary" id="parseBtn">
+                                <i class="fas fa-play"></i> Parse & Analyze
+                            </button>
+                            <button class="btn btn-secondary" id="clearBtn">
+                                <i class="fas fa-trash"></i> Clear
+                            </button>
+                            <button class="btn btn-primary" id="updateBtn" title="Grep err file and refresh">
+                                <i class="fas fa-sync"></i> Update from err
+                            </button>
+                        </div>
+
+                        <!-- Loading Indicator -->
+                        <div class="loading" id="loading">
+                            <div class="spinner-border spinner-border-sm" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2">Processing...</p>
+                        </div>
+
+                        <!-- Alert Messages -->
+                        <div class="alert alert-danger mt-3" id="errorAlert"></div>
+                        <div class="alert alert-success mt-3" id="successAlert"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Panel -->
+            <div class="col-lg-8">
+                <!-- Statistics -->
+                <div id="statsContainer" style="display: none;">
+                    <div class="stats-grid" id="statsGrid"></div>
+                </div>
+
+                <!-- Plot -->
+                <div id="plotContainer" class="card" style="display: none;">
+                    <div class="card-header">
+                        <h5><i class="fas fa-chart-line"></i> <span id="plotTitle">Price vs Timestamp</span></h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="plotImage" style="text-align: center;"></div>
+                    </div>
+                </div>
+
+                <!-- Table Preview -->
+                <div id="tableContainer" class="card" style="display: none;">
+                    <div class="card-header">
+                        <h5><i class="fas fa-table"></i> Data Preview</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="tablePreview"></div>
+                        <div class="mt-3">
+                            <button class="btn btn-primary btn-sm" id="downloadBtn">
+                                <i class="fas fa-download"></i> Download CSV
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+            <small>Order Analysis Dashboard v1.0 | Powered by Flask & Pandas</small>
+        </footer>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentCsvData = '';
+
+        // --- Engine err file selection ---
+        const errFileSelect = document.getElementById('errFileSelect');
+        const errFileRefreshBtn = document.getElementById('errFileRefreshBtn');
+        const errFilePathInput = document.getElementById('errFilePathInput');
+        const errFileApplyBtn = document.getElementById('errFileApplyBtn');
+        const errFileHint = document.getElementById('errFileHint');
+
+        // --- Symbol pair filter (client-side state; sent to server for err greps) ---
+        const symbolPairInput = document.getElementById('symbolPairInput');
+        const symbolPairClearBtn = document.getElementById('symbolPairClearBtn');
+        const symbolPairHint = document.getElementById('symbolPairHint');
+
+        function getSymbolPair() {
+            const v = (symbolPairInput?.value || '').trim().toUpperCase();
+            return v;
+        }
+
+        if (symbolPairInput) {
+            const saved = (window.localStorage?.getItem('muse2_symbol_pair') || '').trim();
+            if (saved) symbolPairInput.value = saved;
+            symbolPairInput.addEventListener('input', () => {
+                const v = getSymbolPair();
+                if (window.localStorage) window.localStorage.setItem('muse2_symbol_pair', v);
+                if (symbolPairHint) symbolPairHint.textContent = v ? `Filtering symbol: ${v}` : 'Applies to err-based plots (Refresh / MyBBO / Filled+Position).';
+            });
+        }
+        if (symbolPairClearBtn) {
+            symbolPairClearBtn.addEventListener('click', () => {
+                if (!symbolPairInput) return;
+                symbolPairInput.value = '';
+                if (window.localStorage) window.localStorage.setItem('muse2_symbol_pair', '');
+                if (symbolPairHint) symbolPairHint.textContent = 'Applies to err-based plots (Refresh / MyBBO / Filled+Position).';
+            });
+        }
+
+        function _setErrHint(msg, isError = false) {
+            errFileHint.textContent = msg || '';
+            errFileHint.classList.toggle('text-danger', !!isError);
+            errFileHint.classList.toggle('text-muted', !isError);
+        }
+
+        async function loadErrFiles() {
+            _setErrHint('Loading…');
+            try {
+                const r = await fetch('/api/err-files', { method: 'GET' });
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const data = await r.json();
+
+                const current = data.current || '';
+                const candidates = Array.isArray(data.candidates) ? data.candidates : [];
+
+                errFileSelect.innerHTML = '';
+                const curOpt = document.createElement('option');
+                curOpt.value = current;
+                curOpt.textContent = current ? current : '(none)';
+                errFileSelect.appendChild(curOpt);
+
+                if (candidates.length) {
+                    const sep = document.createElement('option');
+                    sep.disabled = true;
+                    sep.textContent = '──────────';
+                    errFileSelect.appendChild(sep);
+                }
+
+                for (const c of candidates) {
+                    const p = c.path || '';
+                    if (!p || p === current) continue;
+                    const opt = document.createElement('option');
+                    opt.value = p;
+                    opt.textContent = p;
+                    errFileSelect.appendChild(opt);
+                }
+
+                if (!errFilePathInput.value && current) {
+                    errFilePathInput.value = current;
+                }
+                _setErrHint(current ? `Using: ${current}` : 'No err file selected');
+            } catch (e) {
+                _setErrHint(`Err file list unavailable (${e.message})`, true);
+            }
+        }
+
+        errFileRefreshBtn.addEventListener('click', loadErrFiles);
+
+        errFileSelect.addEventListener('change', () => {
+            const v = (errFileSelect.value || '').trim();
+            if (v) errFilePathInput.value = v;
+        });
+
+        errFileApplyBtn.addEventListener('click', async () => {
+            const path = (errFilePathInput.value || errFileSelect.value || '').trim();
+            if (!path) {
+                showError('Please provide an err file path');
+                return;
+            }
+            _setErrHint('Applying…');
+            try {
+                const r = await fetch('/api/err-file', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path })
+                });
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+                _setErrHint(data.current ? `Using: ${data.current}` : 'Updated');
+                showSuccess('Err file updated');
+                await loadErrFiles();
+            } catch (e) {
+                _setErrHint(`Failed: ${e.message}`, true);
+                showError(`Failed to set err file: ${e.message}`);
+            }
+        });
+
+        // --- Trader enable/disable control ---
+        const traderEnabledSwitch = document.getElementById('traderEnabledSwitch');
+        const traderEnabledHint = document.getElementById('traderEnabledHint');
+        const traderVolMultInput = document.getElementById('traderVolMultInput');
+        const traderVolMultApplyBtn = document.getElementById('traderVolMultApplyBtn');
+        const traderVolMultHint = document.getElementById('traderVolMultHint');
+
+        const traderPositionSlopeInput = document.getElementById('traderPositionSlopeInput');
+        const traderPositionSlopeApplyBtn = document.getElementById('traderPositionSlopeApplyBtn');
+        const traderPositionSlopeHint = document.getElementById('traderPositionSlopeHint');
+
+        async function refreshTraderState() {
+            try {
+                const r = await fetch('/api/trader/state', { method: 'GET' });
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const data = await r.json();
+                traderEnabledSwitch.checked = !!data.enabled;
+                traderEnabledHint.textContent = data.enabled ? 'Orders ON' : 'Orders OFF';
+
+                const vm = (data.volMult === null || data.volMult === undefined) ? null : Number(data.volMult);
+                if (vm !== null && Number.isFinite(vm) && vm > 0) {
+                    traderVolMultHint.textContent = `Current volMult: ${vm}`;
+                    // Only auto-fill if user hasn't typed anything.
+                    if (!traderVolMultInput.value)
+                        traderVolMultInput.value = String(vm);
+                } else {
+                    traderVolMultHint.textContent = 'Current volMult: (unset)';
+                }
+
+                const ps = (data.positionSlope === null || data.positionSlope === undefined) ? null : Number(data.positionSlope);
+                if (ps !== null && Number.isFinite(ps)) {
+                    traderPositionSlopeHint.textContent = `Current positionSlope: ${ps}`;
+                    if (!traderPositionSlopeInput.value)
+                        traderPositionSlopeInput.value = String(ps);
+                } else {
+                    traderPositionSlopeHint.textContent = 'Current positionSlope: (unset)';
+                }
+            } catch (e) {
+                traderEnabledHint.textContent = `State unavailable (${e.message})`;
+                traderVolMultHint.textContent = '';
+                traderPositionSlopeHint.textContent = '';
+            }
+        }
+
+        traderEnabledSwitch.addEventListener('change', async () => {
+            const enabled = traderEnabledSwitch.checked;
+            traderEnabledHint.textContent = 'Updating…';
+            try {
+                const r = await fetch('/api/trader/state', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled })
+                });
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const data = await r.json();
+                traderEnabledSwitch.checked = !!data.enabled;
+                traderEnabledHint.textContent = data.enabled ? 'Orders ON' : 'Orders OFF';
+                showSuccess(data.enabled ? 'Trader enabled' : 'Trader disabled');
+            } catch (e) {
+                showError(`Failed to update trader state: ${e.message}`);
+                await refreshTraderState();
+            }
+        });
+
+        traderVolMultApplyBtn.addEventListener('click', async () => {
+            const raw = (traderVolMultInput.value || '').trim();
+            const volMult = raw ? Number(raw) : 0;
+            if (!Number.isFinite(volMult) || volMult < 0) {
+                showError('Invalid VolMult (must be >= 0)');
+                return;
+            }
+            traderVolMultHint.textContent = 'Updating…';
+            try {
+                const r = await fetch('/api/trader/volmult', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ volMult })
+                });
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const data = await r.json();
+                const vm = (data.volMult === null || data.volMult === undefined) ? null : Number(data.volMult);
+                if (vm !== null && Number.isFinite(vm) && vm > 0) {
+                    traderVolMultHint.textContent = `Current volMult: ${vm}`;
+                    showSuccess(`VolMult set to ${vm}`);
+                } else {
+                    traderVolMultHint.textContent = 'Current volMult: (unset)';
+                    showSuccess('VolMult unset');
+                }
+            } catch (e) {
+                showError(`Failed to update VolMult: ${e.message}`);
+                await refreshTraderState();
+            }
+        });
+
+        traderPositionSlopeApplyBtn.addEventListener('click', async () => {
+            const raw = (traderPositionSlopeInput.value || '').trim();
+            if (!raw) {
+                showError('PositionSlope is required');
+                return;
+            }
+            const positionSlope = Number(raw);
+            if (!Number.isFinite(positionSlope)) {
+                showError('Invalid PositionSlope');
+                return;
+            }
+            traderPositionSlopeHint.textContent = 'Updating…';
+            try {
+                const r = await fetch('/api/trader/positionslope', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ positionSlope })
+                });
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const data = await r.json();
+                const ps = (data.positionSlope === null || data.positionSlope === undefined) ? null : Number(data.positionSlope);
+                if (ps !== null && Number.isFinite(ps)) {
+                    traderPositionSlopeHint.textContent = `Current positionSlope: ${ps}`;
+                    showSuccess(`PositionSlope set to ${ps}`);
+                } else {
+                    traderPositionSlopeHint.textContent = 'Current positionSlope: (unset)';
+                    showSuccess('PositionSlope unset');
+                }
+            } catch (e) {
+                showError(`Failed to update PositionSlope: ${e.message}`);
+                await refreshTraderState();
+            }
+        });
+
+        // Load current state on page load.
+        refreshTraderState();
+        loadErrFiles();
+
+        // Client-side test remains optional; server-side inline plot already rendered.
+
+        // File upload handling
+        const fileUploadArea = document.getElementById('fileUploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileName = document.getElementById('fileName');
+
+        fileUploadArea.addEventListener('click', () => fileInput.click());
+
+        fileUploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            fileUploadArea.classList.add('dragging');
+        });
+
+        fileUploadArea.addEventListener('dragleave', () => {
+            fileUploadArea.classList.remove('dragging');
+        });
+
+        fileUploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            fileUploadArea.classList.remove('dragging');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                fileName.textContent = `Selected: ${files[0].name}`;
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                fileName.textContent = `Selected: ${e.target.files[0].name}`;
+            }
+        });
+
+        // Parse & Analyze
+        document.getElementById('parseBtn').addEventListener('click', async () => {
+            const activeTab = document.querySelector('.nav-link.active').getAttribute('href');
+
+            if (activeTab === '#upload-tab') {
+                if (fileInput.files.length === 0) {
+                    showError('Please select a file');
+                    return;
+                }
+                await uploadFile();
+            } else {
+                const logText = document.getElementById('logText').value;
+                if (!logText.trim()) {
+                    showError('Please paste log content');
+                    return;
+                }
+                await parseLog(logText);
+            }
+        });
+
+        async function uploadFile() {
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            formData.append('log_format', document.getElementById('logFormat').value);
+
+            showLoading();
+            try {
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    displayResults(data);
+                    showSuccess('Data parsed successfully!');
+                } else {
+                    showError(data.error);
+                }
+            } catch (error) {
+                showError(`Error: ${error.message}`);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function parseLog(logText) {
+            showLoading();
+            try {
+                const response = await fetch('/api/parse', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        log_text: logText,
+                        log_format: document.getElementById('logFormat').value
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    displayResults(data);
+                    showSuccess('Data parsed successfully!');
+                } else {
+                    showError(data.error);
+                }
+            } catch (error) {
+                showError(`Error: ${error.message}`);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Update from err file on server
+        document.getElementById('updateBtn').addEventListener('click', async () => {
+            showLoading();
+            try {
+                const response = await fetch('/api/refresh', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ symbolPair: getSymbolPair() })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    displayResults(data);
+                    showSuccess('Refreshed from err file');
+                } else {
+                    showError(data.error || 'Refresh failed');
+                }
+            } catch (err) {
+                showError(`Error: ${err.message}`);
+            } finally {
+                hideLoading();
+            }
+        });
+
+        function displayResults(data) {
+            // Store CSV data for download
+            currentCsvData = data.csv_data;
+
+            // Optional: update plot title
+            const plotTitleEl = document.getElementById('plotTitle');
+            if (plotTitleEl && data.plot_title) {
+                plotTitleEl.textContent = data.plot_title;
+            } else if (plotTitleEl) {
+                plotTitleEl.textContent = 'Price vs Timestamp';
+            }
+
+            // Display statistics
+            const statsContainer = document.getElementById('statsContainer');
+            const statsGrid = document.getElementById('statsGrid');
+            statsGrid.innerHTML = '';
+
+            const stats = data.stats;
+
+            // Record count
+            statsGrid.innerHTML += `
+                <div class="stat-box">
+                    <h6><i class="fas fa-list"></i> Total Records</h6>
+                    <div class="value">${data.row_count}</div>
+                </div>
+            `;
+
+            // Columns
+            statsGrid.innerHTML += `
+                <div class="stat-box">
+                    <h6><i class="fas fa-columns"></i> Columns</h6>
+                    <div class="value">${data.column_count}</div>
+                </div>
+            `;
+
+            // Price stats
+            if (stats.price_stats) {
+                const p = stats.price_stats;
+                statsGrid.innerHTML += `
+                    <div class="stat-box">
+                        <h6><i class="fas fa-dollar-sign"></i> Avg Price</h6>
+                        <div class="value">$${p.mean.toFixed(2)}</div>
+                    </div>
+                `;
+                statsGrid.innerHTML += `
+                    <div class="stat-box">
+                        <h6><i class="fas fa-arrow-up-arrow-down"></i> Price Range</h6>
+                        <div class="value">$${p.min.toFixed(2)} - $${p.max.toFixed(2)}</div>
+                    </div>
+                `;
+            }
+
+            // Position stats
+            if (stats.position_stats) {
+                const p = stats.position_stats;
+                statsGrid.innerHTML += `
+                    <div class="stat-box">
+                        <h6><i class="fas fa-wave-square"></i> Avg Position</h6>
+                        <div class="value">${p.mean.toFixed(4)}</div>
+                    </div>
+                `;
+                statsGrid.innerHTML += `
+                    <div class="stat-box">
+                        <h6><i class="fas fa-arrow-up-arrow-down"></i> Position Range</h6>
+                        <div class="value">${p.min.toFixed(4)} - ${p.max.toFixed(4)}</div>
+                    </div>
+                `;
+                statsGrid.innerHTML += `
+                    <div class="stat-box">
+                        <h6><i class="fas fa-clock"></i> Last Position</h6>
+                        <div class="value">${p.last.toFixed(4)}</div>
+                    </div>
+                `;
+            }
+
+            // Quantity stats
+            if (stats.quantity_stats) {
+                const q = stats.quantity_stats;
+                statsGrid.innerHTML += `
+                    <div class="stat-box">
+                        <h6><i class="fas fa-cube"></i> Total Qty</h6>
+                        <div class="value">${q.total.toFixed(2)}</div>
+                    </div>
+                `;
+            }
+
+            // Status counts
+            if (stats.status_counts) {
+                let statusHtml = '<div class="stat-box"><h6><i class="fas fa-flag"></i> Status Counts</h6><div class="value">';
+                for (const [status, count] of Object.entries(stats.status_counts)) {
+                    statusHtml += `<small>${status}: ${count}</small><br>`;
+                }
+                statusHtml += '</div></div>';
+                statsGrid.innerHTML += statusHtml;
+            }
+
+            // Avg fill price by side (uses lastPx/lastQty server-side)
+            if (stats.avg_fill_price_by_side) {
+                const buy = stats.avg_fill_price_by_side.BUY;
+                const sell = stats.avg_fill_price_by_side.SELL;
+                if (buy && buy.avg_price !== undefined && buy.avg_price !== null) {
+                    statsGrid.innerHTML += `
+                        <div class="stat-box">
+                            <h6><i class="fas fa-arrow-up"></i> BUY Avg Fill Px</h6>
+                            <div class="value">${Number(buy.avg_price).toFixed(6)}</div>
+                        </div>
+                    `;
+                }
+                if (sell && sell.avg_price !== undefined && sell.avg_price !== null) {
+                    statsGrid.innerHTML += `
+                        <div class="stat-box">
+                            <h6><i class="fas fa-arrow-down"></i> SELL Avg Fill Px</h6>
+                            <div class="value">${Number(sell.avg_price).toFixed(6)}</div>
+                        </div>
+                    `;
+                }
+            }
+
+            statsContainer.style.display = 'block';
+
+            // Display plot
+            const plotContainer = document.getElementById('plotContainer');
+            const plotImage = document.getElementById('plotImage');
+            if (data.bokeh) {
+                plotImage.innerHTML = '';
+                if (window.Bokeh && Bokeh.embed && Bokeh.embed.embed_item) {
+                    Bokeh.embed.embed_item(data.bokeh, 'plotImage');
+                    plotContainer.style.display = 'block';
+                } else {
+                    showError('Bokeh failed to load (window.Bokeh is undefined).');
+                }
+            } else if (data.plot) {
+                plotImage.innerHTML = `<img src="${data.plot}" alt="Price vs Timestamp">`;
+                plotContainer.style.display = 'block';
+            }
+
+            // Display table
+            const tableContainer = document.getElementById('tableContainer');
+            const tablePreview = document.getElementById('tablePreview');
+            tablePreview.innerHTML = data.table;
+            tableContainer.style.display = 'block';
+        }
+
+        // MyBBO plot button
+        document.getElementById('mybboPltBtn').addEventListener('click', async () => {
+            showLoading();
+            try {
+                const response = await fetch('/api/mybbo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ symbolPair: getSymbolPair() })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    displayMyBBOResults(data);
+                    showSuccess('MyBBO plot generated');
+                } else {
+                    showError(data.error || 'MyBBO plot generation failed');
+                }
+            } catch (err) {
+                showError(`Error: ${err.message}`);
+            } finally {
+                hideLoading();
+            }
+        });
+
+        function displayMyBBOResults(data) {
+            // Display statistics
+            const statsContainer = document.getElementById('statsContainer');
+            const statsGrid = document.getElementById('statsGrid');
+            statsGrid.innerHTML = '';
+
+            const stats = data.stats;
+
+            // Record count
+            statsGrid.innerHTML += `
+                <div class="stat-box">
+                    <h6><i class="fas fa-list"></i> Total Records</h6>
+                    <div class="value">${data.row_count}</div>
+                </div>
+            `;
+
+            // Time range
+            statsGrid.innerHTML += `
+                <div class="stat-box">
+                    <h6><i class="fas fa-clock"></i> Time Range</h6>
+                    <div class="value" style="font-size: 11px;">${stats.time_range}</div>
+                </div>
+            `;
+
+            // Bid price stats
+            if (stats.bid_price_stats) {
+                const b = stats.bid_price_stats;
+                statsGrid.innerHTML += `
+                    <div class="stat-box">
+                        <h6><i class="fas fa-arrow-down"></i> Bid Price</h6>
+                        <div class="value">${b.mean.toFixed(4)}</div>
+                        <small>Range: ${b.min.toFixed(4)} - ${b.max.toFixed(4)}</small>
+                    </div>
+                `;
+            }
+
+            // Ask price stats
+            if (stats.ask_price_stats) {
+                const a = stats.ask_price_stats;
+                statsGrid.innerHTML += `
+                    <div class="stat-box">
+                        <h6><i class="fas fa-arrow-up"></i> Ask Price</h6>
+                        <div class="value">${a.mean.toFixed(4)}</div>
+                        <small>Range: ${a.min.toFixed(4)} - ${a.max.toFixed(4)}</small>
+                    </div>
+                `;
+            }
+
+            // Spread stats
+            if (stats.spread_stats) {
+                const s = stats.spread_stats;
+                statsGrid.innerHTML += `
+                    <div class="stat-box">
+                        <h6><i class="fas fa-exchange-alt"></i> Spread</h6>
+                        <div class="value">${s.mean.toFixed(6)}</div>
+                        <small>Range: ${s.min.toFixed(6)} - ${s.max.toFixed(6)}</small>
+                    </div>
+                `;
+            }
+
+            statsContainer.style.display = 'block';
+
+            // Display plot
+            const plotContainer = document.getElementById('plotContainer');
+            const plotImage = document.getElementById('plotImage');
+            if (data.bokeh) {
+                plotImage.innerHTML = '';
+                if (window.Bokeh && Bokeh.embed && Bokeh.embed.embed_item) {
+                    Bokeh.embed.embed_item(data.bokeh, 'plotImage');
+                    plotContainer.style.display = 'block';
+                } else {
+                    showError('Bokeh failed to load (window.Bokeh is undefined).');
+                }
+            } else if (data.plot) {
+                plotImage.innerHTML = `<img src="${data.plot}" alt="MyBBO Analysis">`;
+                plotContainer.style.display = 'block';
+            }
+
+            // Display table
+            const tableContainer = document.getElementById('tableContainer');
+            const tablePreview = document.getElementById('tablePreview');
+            tablePreview.innerHTML = data.table;
+            tableContainer.style.display = 'block';
+        }
+
+        // Filled Orders plot button
+        document.getElementById('filledOrdersBtn').addEventListener('click', async () => {
+            showLoading();
+            try {
+                const response = await fetch('/api/fills-and-position', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ symbolPair: getSymbolPair() })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    displayResults(data);
+                    showSuccess('Filled + position plot generated');
+                } else {
+                    showError(data.error || 'Filled orders plot generation failed');
+                }
+            } catch (err) {
+                showError(`Error: ${err.message}`);
+            } finally {
+                hideLoading();
+            }
+        });
+
+        // Clear all
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            fileInput.value = '';
+            fileName.textContent = '';
+            document.getElementById('logText').value = '';
+            document.getElementById('statsContainer').style.display = 'none';
+            document.getElementById('plotContainer').style.display = 'none';
+            document.getElementById('tableContainer').style.display = 'none';
+            document.getElementById('errorAlert').classList.remove('active');
+            document.getElementById('successAlert').classList.remove('active');
+            currentCsvData = '';
+        });
+
+        // Download CSV
+        document.getElementById('downloadBtn').addEventListener('click', async () => {
+            if (!currentCsvData) {
+                showError('No data to download');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/download-csv', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        csv_data: currentCsvData
+                    })
+                });
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `orders_${new Date().toISOString().slice(0, 10)}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+            } catch (error) {
+                showError(`Download error: ${error.message}`);
+            }
+        });
+
+        // Helper functions
+        function showLoading() {
+            document.getElementById('loading').classList.add('active');
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').classList.remove('active');
+        }
+
+        function showError(message) {
+            const alert = document.getElementById('errorAlert');
+            alert.textContent = message;
+            alert.classList.add('active');
+            setTimeout(() => alert.classList.remove('active'), 5000);
+        }
+
+        function showSuccess(message) {
+            const alert = document.getElementById('successAlert');
+            alert.textContent = message;
+            alert.classList.add('active');
+            setTimeout(() => alert.classList.remove('active'), 3000);
+        }
+    </script>
+</body>
+
+</html>

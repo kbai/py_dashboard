@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Force Orders - Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    {{ bokeh_css|safe }}
+    {{ bokeh_js|safe }}
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --accent-color: #3498db;
+            --success-color: #27ae60;
+            --warning-color: #f39c12;
+            --danger-color: #e74c3c;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container-main {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: var(--primary-color);
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #7f8c8d;
+            margin: 0;
+        }
+
+        .card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px 10px 0 0 !important;
+            padding: 16px 20px;
+        }
+
+        .table {
+            margin: 0;
+            font-size: 12px;
+        }
+
+        .table thead {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .alert {
+            border-radius: 8px;
+            border: none;
+        }
+
+        footer {
+            text-align: center;
+            color: white;
+            margin-top: 30px;
+            padding: 20px;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            .header {
+                padding: 20px;
+            }
+        }
+
+        #forceOrdersBarChart {
+            width: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container-main">
+        <div class="header">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div>
+                    <h1><i class="fas fa-bolt"></i> Force Orders</h1>
+                    <p>Last <span id="minutesSpan">…</span> minutes (from KDB on localhost:5011)</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <a class="btn btn-outline-secondary" href="/">Back to Dashboard</a>
+                </div>
+            </div>
+        </div>
+
+        <div id="errorAlert" class="alert alert-danger d-none" role="alert"></div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-column"></i> Minute-by-minute</h5>
+            </div>
+            <div class="card-body">
+                <div id="forceOrdersBarChart"></div>
+            </div>
+        </div>
+
+        <footer>
+            <small>Order Analysis Dashboard | Force Orders</small>
+        </footer>
+    </div>
+
+    <script>
+        function getMinutes() {
+            const url = new URL(window.location.href);
+            const m = parseInt(url.searchParams.get('minutes') || '30', 10);
+            if (!Number.isFinite(m) || m <= 0) return 30;
+            return Math.min(240, m);
+        }
+
+        function setError(msg) {
+            const el = document.getElementById('errorAlert');
+            el.textContent = msg;
+            el.classList.remove('d-none');
+        }
+
+        function clearError() {
+            const el = document.getElementById('errorAlert');
+            el.textContent = '';
+            el.classList.add('d-none');
+        }
+
+        async function loadForceOrders() {
+            clearError();
+            const minutes = getMinutes();
+            document.getElementById('minutesSpan').textContent = String(minutes);
+
+            // Chart
+            try {
+                const barResp = await fetch(`/api/force-orders/bars?minutes=${encodeURIComponent(minutes)}`);
+                const barData = await barResp.json();
+                if (!barResp.ok) {
+                    throw new Error(barData && barData.error ? barData.error : `Chart request failed: ${barResp.status}`);
+                }
+                const chartEl = document.getElementById('forceOrdersBarChart');
+                chartEl.innerHTML = '';
+                if (!(window.Bokeh && Bokeh.embed && Bokeh.embed.embed_item)) {
+                    throw new Error('Bokeh JS did not load (try setting DASHBOARD_BOKEH_RESOURCES=inline)');
+                }
+                if (barData && barData.item) {
+                    try {
+                        const jsVer = String((Bokeh && Bokeh.version) ? Bokeh.version : '');
+                        const itemVer = String(barData.item.version || '');
+                        if (jsVer && itemVer && jsVer !== itemVer) {
+                            throw new Error(`BokehJS version mismatch (js=${jsVer}, item=${itemVer}). Reload the page (hard refresh) or use inline resources.`);
+                        }
+                    } catch (e) {
+                        throw e;
+                    }
+                    // json_item already includes target_id='forceOrdersBarChart'
+                    Bokeh.embed.embed_item(barData.item);
+                }
+            } catch (e) {
+                setError(String(e));
+            }
+        }
+
+        loadForceOrders().catch(err => setError(String(err)));
+    </script>
+</body>
+
+</html>
