@@ -1026,9 +1026,11 @@ def _trader_rpc(cmd: str, timeout_s: float = 0.25) -> dict:
       - '1' / 'on' / 'enable'
       - '0' / 'off' / 'disable'
             - 'volmult <float>' / 'volmult=<float>'
+            - 'positionslope <float>' / 'positionslope=<float>'
+            - 'macdcoeff <float>' / 'macdcoeff=<float>'
 
         Response starts with a single byte: '1' or '0' (enabled), and may include
-        additional fields like: "1 volmult=1.500000".
+                additional fields like: "1 volmult=1.500000 positionslope=0.200000 macdcoeff=0.100000".
     """
     import socket
 
@@ -1051,6 +1053,7 @@ def _trader_rpc(cmd: str, timeout_s: float = 0.25) -> dict:
 
     vol_mult: Optional[float] = None
     position_slope: Optional[float] = None
+    btc_macd_coeff: Optional[float] = None
     try:
         low = raw.lower()
         if 'volmult=' in low:
@@ -1059,6 +1062,9 @@ def _trader_rpc(cmd: str, timeout_s: float = 0.25) -> dict:
         if 'positionslope=' in low:
             part = low.split('positionslope=', 1)[1].strip().split()[0]
             position_slope = float(part)
+        if 'macdcoeff=' in low:
+            part = low.split('macdcoeff=', 1)[1].strip().split()[0]
+            btc_macd_coeff = float(part)
         else:
             # Fallback: response like "1 1.5"
             toks = low.split()
@@ -1067,8 +1073,9 @@ def _trader_rpc(cmd: str, timeout_s: float = 0.25) -> dict:
     except Exception:
         vol_mult = None
         position_slope = None
+        btc_macd_coeff = None
 
-    return {'raw': raw, 'enabled': enabled, 'volMult': vol_mult, 'positionSlope': position_slope}
+    return {'raw': raw, 'enabled': enabled, 'volMult': vol_mult, 'positionSlope': position_slope, 'btcMacdCoeff': btc_macd_coeff}
 # --- Login Required Decorator ---
 from functools import wraps
 def login_required(f):
@@ -1965,15 +1972,7 @@ def plot_to_base64(df: pd.DataFrame, symbol_col: str = "symbol",
 @login_required
 def index():
     """Serve the main dashboard page."""
-    # Default to INLINE so the browser always gets the matching BokehJS version.
-    # You can still override with DASHBOARD_BOKEH_RESOURCES=cdn.
-    bokeh_resources_mode = os.environ.get('DASHBOARD_BOKEH_RESOURCES', 'inline').strip().lower()
-    resources = INLINE if bokeh_resources_mode == 'inline' else CDN
-    return render_template(
-        'dashboard.html',
-        bokeh_js=resources.render_js(),
-        bokeh_css=resources.render_css(),
-    )
+    return render_template('dashboard.html')
 
 
 @app.route('/force-orders')
@@ -2476,7 +2475,7 @@ def trader_state_get():
         vol_mult = resp.get('volMult')
         if enabled is None:
             enabled = True
-        return jsonify({'enabled': enabled, 'volMult': vol_mult, 'positionSlope': resp.get('positionSlope'), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT, 'raw': resp.get('raw', '')})
+        return jsonify({'enabled': enabled, 'volMult': vol_mult, 'positionSlope': resp.get('positionSlope'), 'btcMacdCoeff': resp.get('btcMacdCoeff'), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT, 'raw': resp.get('raw', '')})
     except Exception as e:
         return jsonify({'error': str(e), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT}), 503
 
@@ -2493,7 +2492,7 @@ def trader_state_set():
         vol_mult = resp.get('volMult')
         if effective is None:
             effective = enabled
-        return jsonify({'enabled': effective, 'volMult': vol_mult, 'positionSlope': resp.get('positionSlope'), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT, 'raw': resp.get('raw', '')})
+        return jsonify({'enabled': effective, 'volMult': vol_mult, 'positionSlope': resp.get('positionSlope'), 'btcMacdCoeff': resp.get('btcMacdCoeff'), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT, 'raw': resp.get('raw', '')})
     except Exception as e:
         return jsonify({'error': str(e), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT}), 503
 
@@ -2510,7 +2509,7 @@ def trader_volmult_set():
 
     try:
         resp = _trader_rpc(f'volmult {vol_mult}')
-        return jsonify({'enabled': resp.get('enabled'), 'volMult': resp.get('volMult'), 'positionSlope': resp.get('positionSlope'), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT, 'raw': resp.get('raw', '')})
+        return jsonify({'enabled': resp.get('enabled'), 'volMult': resp.get('volMult'), 'positionSlope': resp.get('positionSlope'), 'btcMacdCoeff': resp.get('btcMacdCoeff'), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT, 'raw': resp.get('raw', '')})
     except Exception as e:
         return jsonify({'error': str(e), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT}), 503
 
@@ -2527,7 +2526,24 @@ def trader_positionslope_set():
 
     try:
         resp = _trader_rpc(f'positionslope {position_slope}')
-        return jsonify({'enabled': resp.get('enabled'), 'volMult': resp.get('volMult'), 'positionSlope': resp.get('positionSlope'), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT, 'raw': resp.get('raw', '')})
+        return jsonify({'enabled': resp.get('enabled'), 'volMult': resp.get('volMult'), 'positionSlope': resp.get('positionSlope'), 'btcMacdCoeff': resp.get('btcMacdCoeff'), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT, 'raw': resp.get('raw', '')})
+    except Exception as e:
+        return jsonify({'error': str(e), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT}), 503
+
+
+@app.route('/api/trader/btcmacdcoeff', methods=['POST'])
+@login_required
+def trader_btcmacdcoeff_set():
+    """Set the runtime BTCUSDT MACD coefficient via TraderControl."""
+    data = request.get_json(silent=True) or {}
+    try:
+        btc_macd_coeff = float(data.get('btcMacdCoeff'))
+    except Exception:
+        return jsonify({'error': 'invalid btcMacdCoeff'}), 400
+
+    try:
+        resp = _trader_rpc(f'macdcoeff {btc_macd_coeff}')
+        return jsonify({'enabled': resp.get('enabled'), 'volMult': resp.get('volMult'), 'positionSlope': resp.get('positionSlope'), 'btcMacdCoeff': resp.get('btcMacdCoeff'), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT, 'raw': resp.get('raw', '')})
     except Exception as e:
         return jsonify({'error': str(e), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT}), 503
 
