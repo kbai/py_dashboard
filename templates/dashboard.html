@@ -208,6 +208,16 @@
                 </div>
 
                 <div class="control-row">
+                    <label for="traderMaxPositionInput">Max position</label>
+                    <div class="compact-input-group">
+                        <input type="number" class="form-control" id="traderMaxPositionInput" step="0.1" min="0"
+                            placeholder="(unset)">
+                        <button class="btn btn-primary" type="button" id="traderMaxPositionApplyBtn">Apply</button>
+                    </div>
+                    <small id="traderMaxPositionHint"></small>
+                </div>
+
+                <div class="control-row">
                     <label for="traderPositionSlopeInput">Vol slope</label>
                     <div class="compact-input-group">
                         <input type="number" class="form-control" id="traderPositionSlopeInput" step="0.1"
@@ -249,6 +259,10 @@
         const traderVolMultApplyBtn = document.getElementById('traderVolMultApplyBtn');
         const traderVolMultHint = document.getElementById('traderVolMultHint');
 
+        const traderMaxPositionInput = document.getElementById('traderMaxPositionInput');
+        const traderMaxPositionApplyBtn = document.getElementById('traderMaxPositionApplyBtn');
+        const traderMaxPositionHint = document.getElementById('traderMaxPositionHint');
+
         const traderPositionSlopeInput = document.getElementById('traderPositionSlopeInput');
         const traderPositionSlopeApplyBtn = document.getElementById('traderPositionSlopeApplyBtn');
         const traderPositionSlopeHint = document.getElementById('traderPositionSlopeHint');
@@ -273,6 +287,15 @@
                     traderVolMultHint.textContent = 'Current volMult: (unset)';
                 }
 
+                const mp = (data.maxPosition === null || data.maxPosition === undefined) ? null : Number(data.maxPosition);
+                if (mp !== null && Number.isFinite(mp) && mp > 0) {
+                    traderMaxPositionHint.textContent = `Current maxPosition: ${mp}`;
+                    if (!traderMaxPositionInput.value)
+                        traderMaxPositionInput.value = String(mp);
+                } else {
+                    traderMaxPositionHint.textContent = 'Current maxPosition: (unset)';
+                }
+
                 const ps = (data.positionSlope === null || data.positionSlope === undefined) ? null : Number(data.positionSlope);
                 if (ps !== null && Number.isFinite(ps)) {
                     traderPositionSlopeHint.textContent = `Current positionSlope: ${ps}`;
@@ -293,6 +316,7 @@
             } catch (e) {
                 traderEnabledHint.textContent = `State unavailable (${e.message})`;
                 traderVolMultHint.textContent = '';
+                traderMaxPositionHint.textContent = '';
                 traderPositionSlopeHint.textContent = '';
                 traderBtcMacdCoeffHint.textContent = '';
             }
@@ -344,6 +368,36 @@
                 }
             } catch (e) {
                 showError(`Failed to update VolMult: ${e.message}`);
+                await refreshTraderState();
+            }
+        });
+
+        traderMaxPositionApplyBtn.addEventListener('click', async () => {
+            const raw = (traderMaxPositionInput.value || '').trim();
+            const maxPosition = raw ? Number(raw) : 0;
+            if (!Number.isFinite(maxPosition) || maxPosition < 0) {
+                showError('Invalid maxPosition (must be >= 0)');
+                return;
+            }
+            traderMaxPositionHint.textContent = 'Updating…';
+            try {
+                const r = await fetch('/api/trader/maxposition', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ maxPosition })
+                });
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const data = await r.json();
+                const mp = (data.maxPosition === null || data.maxPosition === undefined) ? null : Number(data.maxPosition);
+                if (mp !== null && Number.isFinite(mp) && mp > 0) {
+                    traderMaxPositionHint.textContent = `Current maxPosition: ${mp}`;
+                    showSuccess(`MaxPosition set to ${mp}`);
+                } else {
+                    traderMaxPositionHint.textContent = 'Current maxPosition: (unset)';
+                    showSuccess('MaxPosition unset');
+                }
+            } catch (e) {
+                showError(`Failed to update MaxPosition: ${e.message}`);
                 await refreshTraderState();
             }
         });
