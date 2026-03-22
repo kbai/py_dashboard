@@ -185,7 +185,7 @@
         <div class="header">
             <div>
                 <h1>Trader Controls</h1>
-                <p>Compact controls for trader enablement, volume tuning, and BTC MACD tilt.</p>
+                <p>Compact controls for trader enablement, volatility tuning, and BTC MACD tilt.</p>
             </div>
 
             <div class="trader-toggle">
@@ -205,6 +205,16 @@
                         <button class="btn btn-primary" type="button" id="traderVolMultApplyBtn">Apply</button>
                     </div>
                     <small id="traderVolMultHint"></small>
+                </div>
+
+                <div class="control-row">
+                    <label for="traderVolInterceptInput">Vol intercept</label>
+                    <div class="compact-input-group">
+                        <input type="number" class="form-control" id="traderVolInterceptInput" step="0.001" min="0"
+                            placeholder="0.0">
+                        <button class="btn btn-primary" type="button" id="traderVolInterceptApplyBtn">Apply</button>
+                    </div>
+                    <small id="traderVolInterceptHint"></small>
                 </div>
 
                 <div class="control-row">
@@ -258,6 +268,9 @@
         const traderVolMultInput = document.getElementById('traderVolMultInput');
         const traderVolMultApplyBtn = document.getElementById('traderVolMultApplyBtn');
         const traderVolMultHint = document.getElementById('traderVolMultHint');
+        const traderVolInterceptInput = document.getElementById('traderVolInterceptInput');
+        const traderVolInterceptApplyBtn = document.getElementById('traderVolInterceptApplyBtn');
+        const traderVolInterceptHint = document.getElementById('traderVolInterceptHint');
 
         const traderMaxPositionInput = document.getElementById('traderMaxPositionInput');
         const traderMaxPositionApplyBtn = document.getElementById('traderMaxPositionApplyBtn');
@@ -285,6 +298,15 @@
                         traderVolMultInput.value = String(vm);
                 } else {
                     traderVolMultHint.textContent = 'Current volMult: (unset)';
+                }
+
+                const vi = (data.volIntercept === null || data.volIntercept === undefined) ? null : Number(data.volIntercept);
+                if (vi !== null && Number.isFinite(vi)) {
+                    traderVolInterceptHint.textContent = `Current volIntercept: ${vi}`;
+                    if (!traderVolInterceptInput.value)
+                        traderVolInterceptInput.value = String(vi);
+                } else {
+                    traderVolInterceptHint.textContent = 'Current volIntercept: (unavailable)';
                 }
 
                 const mp = (data.maxPosition === null || data.maxPosition === undefined) ? null : Number(data.maxPosition);
@@ -316,6 +338,7 @@
             } catch (e) {
                 traderEnabledHint.textContent = `State unavailable (${e.message})`;
                 traderVolMultHint.textContent = '';
+                traderVolInterceptHint.textContent = '';
                 traderMaxPositionHint.textContent = '';
                 traderPositionSlopeHint.textContent = '';
                 traderBtcMacdCoeffHint.textContent = '';
@@ -372,6 +395,36 @@
             }
         });
 
+        traderVolInterceptApplyBtn.addEventListener('click', async () => {
+            const raw = (traderVolInterceptInput.value || '').trim();
+            const volIntercept = raw ? Number(raw) : 0;
+            if (!Number.isFinite(volIntercept) || volIntercept < 0) {
+                showError('Invalid VolIntercept (must be >= 0)');
+                return;
+            }
+            traderVolInterceptHint.textContent = 'Updating…';
+            try {
+                const r = await fetch('/api/trader/volintercept', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ volIntercept })
+                });
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const data = await r.json();
+                const vi = (data.volIntercept === null || data.volIntercept === undefined) ? null : Number(data.volIntercept);
+                if (vi !== null && Number.isFinite(vi)) {
+                    traderVolInterceptHint.textContent = `Current volIntercept: ${vi}`;
+                    showSuccess(`VolIntercept set to ${vi}`);
+                } else {
+                    traderVolInterceptHint.textContent = 'Current volIntercept: (unavailable)';
+                    showSuccess('VolIntercept updated');
+                }
+            } catch (e) {
+                showError(`Failed to update VolIntercept: ${e.message}`);
+                await refreshTraderState();
+            }
+        });
+
         traderMaxPositionApplyBtn.addEventListener('click', async () => {
             const raw = (traderMaxPositionInput.value || '').trim();
             const maxPosition = raw ? Number(raw) : 0;
@@ -398,6 +451,36 @@
                 }
             } catch (e) {
                 showError(`Failed to update MaxPosition: ${e.message}`);
+                await refreshTraderState();
+            }
+        });
+
+        traderVolInterceptApplyBtn.addEventListener('click', async () => {
+            const raw = (traderVolInterceptInput.value || '').trim();
+            const volIntercept = raw ? Number(raw) : 0;
+            if (!Number.isFinite(volIntercept) || volIntercept < 0) {
+                showError('Invalid VolIntercept (must be >= 0)');
+                return;
+            }
+            traderVolInterceptHint.textContent = 'Updating…';
+            try {
+                const r = await fetch('/api/trader/volintercept', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ volIntercept })
+                });
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const data = await r.json();
+                const vi = (data.volIntercept === null || data.volIntercept === undefined) ? null : Number(data.volIntercept);
+                if (vi !== null && Number.isFinite(vi)) {
+                    traderVolInterceptHint.textContent = `Current volIntercept: ${vi}`;
+                    showSuccess(`VolIntercept set to ${vi}`);
+                } else {
+                    traderVolInterceptHint.textContent = 'Current volIntercept: (unavailable)';
+                    showSuccess('VolIntercept updated');
+                }
+            } catch (e) {
+                showError(`Failed to update VolIntercept: ${e.message}`);
                 await refreshTraderState();
             }
         });
