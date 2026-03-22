@@ -1026,11 +1026,12 @@ def _trader_rpc(cmd: str, timeout_s: float = 0.25) -> dict:
       - '1' / 'on' / 'enable'
       - '0' / 'off' / 'disable'
             - 'volmult <float>' / 'volmult=<float>'
+            - 'volintercept <float>' / 'volintercept=<float>'
             - 'positionslope <float>' / 'positionslope=<float>'
             - 'macdcoeff <float>' / 'macdcoeff=<float>'
 
         Response starts with a single byte: '1' or '0' (enabled), and may include
-                additional fields like: "1 volmult=1.500000 positionslope=0.200000 macdcoeff=0.100000".
+        additional fields like: "1 volmult=1.500000 volintercept=0.002000 positionslope=0.200000 macdcoeff=0.100000".
     """
     import socket
 
@@ -1052,6 +1053,7 @@ def _trader_rpc(cmd: str, timeout_s: float = 0.25) -> dict:
         enabled = False
 
     vol_mult: Optional[float] = None
+    vol_intercept: Optional[float] = None
     position_slope: Optional[float] = None
     btc_macd_coeff: Optional[float] = None
     try:
@@ -1059,6 +1061,9 @@ def _trader_rpc(cmd: str, timeout_s: float = 0.25) -> dict:
         if 'volmult=' in low:
             part = low.split('volmult=', 1)[1].strip().split()[0]
             vol_mult = float(part)
+        if 'volintercept=' in low:
+            part = low.split('volintercept=', 1)[1].strip().split()[0]
+            vol_intercept = float(part)
         if 'positionslope=' in low:
             part = low.split('positionslope=', 1)[1].strip().split()[0]
             position_slope = float(part)
@@ -1072,10 +1077,11 @@ def _trader_rpc(cmd: str, timeout_s: float = 0.25) -> dict:
                 vol_mult = float(toks[1])
     except Exception:
         vol_mult = None
+        vol_intercept = None
         position_slope = None
         btc_macd_coeff = None
 
-    return {'raw': raw, 'enabled': enabled, 'volMult': vol_mult, 'positionSlope': position_slope, 'btcMacdCoeff': btc_macd_coeff}
+    return {'raw': raw, 'enabled': enabled, 'volMult': vol_mult, 'volIntercept': vol_intercept, 'positionSlope': position_slope, 'btcMacdCoeff': btc_macd_coeff}
 # --- Login Required Decorator ---
 from functools import wraps
 def login_required(f):
@@ -2475,7 +2481,7 @@ def trader_state_get():
         vol_mult = resp.get('volMult')
         if enabled is None:
             enabled = True
-        return jsonify({'enabled': enabled, 'volMult': vol_mult, 'positionSlope': resp.get('positionSlope'), 'btcMacdCoeff': resp.get('btcMacdCoeff'), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT, 'raw': resp.get('raw', '')})
+        return jsonify({'enabled': enabled, 'volMult': vol_mult, 'volIntercept': resp.get('volIntercept'), 'positionSlope': resp.get('positionSlope'), 'btcMacdCoeff': resp.get('btcMacdCoeff'), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT, 'raw': resp.get('raw', '')})
     except Exception as e:
         return jsonify({'error': str(e), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT}), 503
 
@@ -2492,7 +2498,7 @@ def trader_state_set():
         vol_mult = resp.get('volMult')
         if effective is None:
             effective = enabled
-        return jsonify({'enabled': effective, 'volMult': vol_mult, 'positionSlope': resp.get('positionSlope'), 'btcMacdCoeff': resp.get('btcMacdCoeff'), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT, 'raw': resp.get('raw', '')})
+        return jsonify({'enabled': effective, 'volMult': vol_mult, 'volIntercept': resp.get('volIntercept'), 'positionSlope': resp.get('positionSlope'), 'btcMacdCoeff': resp.get('btcMacdCoeff'), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT, 'raw': resp.get('raw', '')})
     except Exception as e:
         return jsonify({'error': str(e), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT}), 503
 
@@ -2509,7 +2515,24 @@ def trader_volmult_set():
 
     try:
         resp = _trader_rpc(f'volmult {vol_mult}')
-        return jsonify({'enabled': resp.get('enabled'), 'volMult': resp.get('volMult'), 'positionSlope': resp.get('positionSlope'), 'btcMacdCoeff': resp.get('btcMacdCoeff'), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT, 'raw': resp.get('raw', '')})
+        return jsonify({'enabled': resp.get('enabled'), 'volMult': resp.get('volMult'), 'volIntercept': resp.get('volIntercept'), 'positionSlope': resp.get('positionSlope'), 'btcMacdCoeff': resp.get('btcMacdCoeff'), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT, 'raw': resp.get('raw', '')})
+    except Exception as e:
+        return jsonify({'error': str(e), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT}), 503
+
+
+@app.route('/api/trader/volintercept', methods=['POST'])
+@login_required
+def trader_volintercept_set():
+    """Set the runtime volatility intercept override via TraderControl."""
+    data = request.get_json(silent=True) or {}
+    try:
+        vol_intercept = float(data.get('volIntercept'))
+    except Exception:
+        return jsonify({'error': 'invalid volIntercept'}), 400
+
+    try:
+        resp = _trader_rpc(f'volintercept {vol_intercept}')
+        return jsonify({'enabled': resp.get('enabled'), 'volMult': resp.get('volMult'), 'volIntercept': resp.get('volIntercept'), 'positionSlope': resp.get('positionSlope'), 'btcMacdCoeff': resp.get('btcMacdCoeff'), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT, 'raw': resp.get('raw', '')})
     except Exception as e:
         return jsonify({'error': str(e), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT}), 503
 
@@ -2526,7 +2549,7 @@ def trader_positionslope_set():
 
     try:
         resp = _trader_rpc(f'positionslope {position_slope}')
-        return jsonify({'enabled': resp.get('enabled'), 'volMult': resp.get('volMult'), 'positionSlope': resp.get('positionSlope'), 'btcMacdCoeff': resp.get('btcMacdCoeff'), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT, 'raw': resp.get('raw', '')})
+        return jsonify({'enabled': resp.get('enabled'), 'volMult': resp.get('volMult'), 'volIntercept': resp.get('volIntercept'), 'positionSlope': resp.get('positionSlope'), 'btcMacdCoeff': resp.get('btcMacdCoeff'), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT, 'raw': resp.get('raw', '')})
     except Exception as e:
         return jsonify({'error': str(e), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT}), 503
 
@@ -2543,7 +2566,7 @@ def trader_btcmacdcoeff_set():
 
     try:
         resp = _trader_rpc(f'macdcoeff {btc_macd_coeff}')
-        return jsonify({'enabled': resp.get('enabled'), 'volMult': resp.get('volMult'), 'positionSlope': resp.get('positionSlope'), 'btcMacdCoeff': resp.get('btcMacdCoeff'), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT, 'raw': resp.get('raw', '')})
+        return jsonify({'enabled': resp.get('enabled'), 'volMult': resp.get('volMult'), 'volIntercept': resp.get('volIntercept'), 'positionSlope': resp.get('positionSlope'), 'btcMacdCoeff': resp.get('btcMacdCoeff'), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT, 'raw': resp.get('raw', '')})
     except Exception as e:
         return jsonify({'error': str(e), 'host': TRADER_CTRL_HOST, 'port': TRADER_CTRL_PORT}), 503
 
